@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Beacon — Cứu hộ, theo dõi và báo động bằng chuỗi tín hiệu quang học P2P.">
+  <title>Beacon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QR Code generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <!-- Live QR Scanner Core -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --indigo-50: #eff6ff; --indigo-100: #dbeafe; --indigo-200: #bfdbfe; --indigo-300: #93c5fd; --indigo-400: #60a5fa; --indigo-500: #3b82f6; --indigo-600: #2563eb; --indigo-700: #1d4ed8;
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0; --slate-300: #cbd5e1; --slate-400: #94a3b8; --slate-500: #64748b; --slate-600: #475569; --slate-800: #1e293b;
+      --red-50: #fef2f2; --red-500: #ef4444; --red-600: #dc2626; --green-500: #22c55e;
+      --white: #ffffff;
+      --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1); --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --radius-md: 12px; --radius-lg: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+    body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; background: var(--slate-100); color: var(--slate-800); overscroll-behavior-y: none; }
+    #root { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--slate-50); display: flex; flex-direction: column; position: relative; overflow-x: hidden; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; outline:none; }
+    button:active { filter: brightness(0.95); transform: scale(0.98); }
+    
+    .app-header { background: var(--white); border-bottom: 1px solid var(--slate-200); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;}
+    .app-name { font-size: 22px; font-weight: 900; color: var(--indigo-600); letter-spacing: -0.5px; }
+    .header-btn { padding: 8px 10px; font-weight: 700; color: var(--slate-600); border-radius: 8px; transition: background 0.2s; display: flex; align-items: center; justify-content: center; }
+    .header-icon { font-size: 24px; line-height: 1; }
+
+    .identity-card { background: linear-gradient(135deg, var(--indigo-500), var(--indigo-600)); border-radius: var(--radius-lg); padding: 24px; color: var(--white); margin: 20px; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); position: relative; overflow: hidden; }
+    .identity-code { font-size: 42px; font-weight: 900; letter-spacing: 5px; margin-top: 4px; text-shadow: 0 2px 4px rgba(0,0,0,0.15); display: flex; align-items:center; gap: 4px; }
+    .btn-refresh { position: absolute; right: 20px; top: 24px; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); transition: transform 0.2s;}
+    
+    .section { padding: 0 20px 20px; }
+    .section-title { font-size: 14px; font-weight: 800; color: var(--slate-800); margin-bottom: 12px; }
+    
+    .btn-action { flex: 1; padding: 16px; border-radius: var(--radius-md); font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: var(--shadow-sm); }
+    .btn-primary { background: var(--indigo-600); color: white; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3); }
+    .btn-secondary { background: var(--white); border: 2px solid var(--slate-200); color: var(--slate-800); }
+    
+    .contacts-card { background: var(--white); border-radius: var(--radius-lg); border: 1px solid var(--slate-200); overflow: hidden; }
+    .contact-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--slate-100); }
+    .contact-item:last-child { border-bottom: none; }
+    .contact-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--indigo-50); color: var(--indigo-600); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; flex-shrink: 0; border: 1px solid var(--indigo-100);}
+    .btn-connect { border: 2px solid var(--indigo-100); padding: 8px 14px; border-radius: 10px; font-weight: 800; font-size: 13px; color: var(--indigo-600); background: var(--white); }
+    
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); z-index: 1000; display: flex; align-items: flex-end; padding: 0; backdrop-filter: blur(4px); }
+    .modal-sheet { background: var(--white); width: 100%; border-radius: 24px 24px 0 0; padding: 24px; max-height: 95vh; overflow-y: auto; display: flex; flex-direction: column; }
+    
+    .input-field-fake { width: 100%; padding: 18px; border: 2px solid var(--indigo-500); border-radius: var(--radius-md); font-size: 28px; font-weight: 900; text-align: center; letter-spacing: 8px; color: var(--slate-800); background: var(--indigo-50); min-height: 70px; display: flex; align-items: center; justify-content: center;}
+    .input-field-fake.empty { color: var(--slate-400); letter-spacing: 2px; font-size: 16px; font-weight: 600;}
+    .input-field-native { width: 100%; padding: 18px; border: 2px solid var(--indigo-300); border-radius: var(--radius-md); font-size: 28px; font-weight: 900; text-align: center; letter-spacing: 8px; outline:none; }
+    .input-field-native:focus { border-color: var(--indigo-600); }
+    
+    .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+    .num-btn { background: var(--slate-100); padding: 16px; font-size: 24px; font-weight: 800; color: var(--slate-800); border-radius: 16px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.05); }
+    .num-btn:active { background: var(--slate-200); box-shadow: inset 0 2px 0 rgba(0,0,0,0.05); transform: translateY(2px); }
+    
+    .chips-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-top: 16px; scrollbar-width: none; }
+    .chips-row::-webkit-scrollbar { display: none; }
+    .chip { display: flex; align-items: center; gap: 6px; background: var(--white); border: 2px solid var(--slate-200); padding: 6px 12px; border-radius: 20px; font-weight: 800; font-size: 13px; color: var(--slate-700); white-space: nowrap; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+    .chip-del { color: var(--slate-400); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--slate-100); border-radius: 50%; font-size: 10px; margin-right: -6px; }
+    
+    .btn-full { width: 100%; padding: 16px; border-radius: var(--radius-md); font-weight: 800; font-size: 16px; text-align: center; }
+
+    .sidebar { position: fixed; inset: 0; z-index: 2000; display: flex; pointer-events: none; }
+    .sidebar.open { pointer-events: auto; }
+    .sidebar-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s; }
+    .sidebar.open .sidebar-mask { opacity: 1; }
+    .sidebar-content { position: absolute; left: 0; top: 0; bottom: 0; width: 340px; max-width: 90vw; background: white; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 24px; display: flex; flex-direction: column; overflow-y: auto; box-shadow: 2px 0 15px rgba(0,0,0,0.2); }
+    .sidebar.open .sidebar-content { transform: translateX(0); }
+
+    .guide-card { background: var(--white); padding: 14px; border-radius: 12px; margin-bottom: 16px; border: 2px solid var(--slate-200); border-left: 4px solid var(--indigo-500); }
+    .guide-card-green { border-left: 4px solid var(--green-500); }
+    .guide-title { font-weight: 800; color: var(--slate-800); margin-bottom: 6px; font-size: 13px; text-transform: uppercase; }
+
+    .flash-screen { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .flash-code { font-size: 80px; font-weight: 900; color: white; text-shadow: 0 4px 20px rgba(0,0,0,0.4); line-height: 1; margin: 10px 0; text-align: center; }
+    
+    @keyframes pulse-bg { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(0.6); } }
+    .anim-pulse { animation: pulse-bg 0.6s infinite; }
+
+    @keyframes sos-blink { 0%, 10% { background: white; color: var(--red-600); } 11%, 40% { background: var(--red-600); color: white; } }
+    .anim-sos { animation: sos-blink 0.3s infinite; }
+
+    /* Custom Toggle Switch */
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background-color: var(--slate-300); transition: .2s; border-radius: 24px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .2s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--indigo-500); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    #reader { width: 100%; border-radius: 16px; overflow: hidden; background: black; min-height: 60vh; }
+    #reader video { object-fit: cover; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useEffect, useRef } = React;
+
+  const DICT = {
+    vi: {
+      app: "Beacon", scan: "Quét Camera", enter: "Nhập Số", contacts: "Quản lý Liên lạc", add_desc: "Tên người này (Nên điền ngắn)",
+      connect: "Gọi", close: "Tắt đèn", cancel: "Hủy", error: "Mã thiết bị PHẢI LÀ đúng 6 SỐ.",
+      session_code: "Mã Giao Tiếp Tạm Thời", wait: "Đang dò kênh...", dist: "Khoảng cách Radar",
+      off_tools: "Hộp Công Cụ Sinh Tồn (Không Mạng)", off_lamp: "Đèn Cảnh Báo", off_sos: "Phát SOS Tầm Xa",
+      no_gps: "Đang giám sát qua đường kết nối IP ngầm.", 
+      gps_on_hint: "Radar GPS bật: Điện thoại sẽ tự bùng sáng khi cách nhau <20m.",
+      gps_off_hint: "Radar GPS tắt: An toàn hơn. Hệ thống sẽ không chớp cho đến khi bạn chủ động ấn nút ở dưới.",
+      pin_hint: "GÕ 6 SỐ HOẶC CHẠM",
+      temp_warn: "Mã số này thay đổi sau mỗi phiên. Giới hạn chia sẻ cho người sẽ gặp mặt hôm nay.",
+      sb_perm_btn: "Chia sẻ Cấu hình SOS Cố định",
+      sb_perm_title: "📌 Hệ Thống SOS Liên Lạc Cố Định",
+      sb_perm_desc: "Chống đi lạc. Lấy điện thoại của con nhỏ hoặc ông bà, mở app và thiết lập cố định QR này. Bất cứ khi cần tìm họ ở siêu thị, bạn mở danh bạ ấn BÁO ĐỘNG, thiết bị ở túi họ sẽ lập tức rống sáng thu hút bảo vệ.",
+      act_mode_1: "📍 Giám Sát Ngầm", act_mode_1_sub: "Đo GPS kín đáo, không báo đèn.",
+      act_mode_2: "✨ Nháy Đồng Bộ", act_mode_2_sub: "Chớp lấp lánh để chào hỏi sân bay.",
+      act_mode_3: "🚨 ÉP CHỚP SOS", act_mode_3_sub: "Dành cho trường hợp khẩn cấp.",
+      hist: "Lịch sử:",
+      guide: "Hướng dẫn", switch_numpad: "Bàn phím ảo", clear: "Xóa Trắng",
+      guide_title: "Hướng dẫn sử dụng Beacon P2P",
+      guide_content_1: "1. Tìm người ở khu vực đông người (Sân bay, Bến xe, ga tàu)",
+      guide_desc_1: "Beacon thay thế biển đón khách bằng giấy truyền thống. Có thể thiết lập trước danh sách kết nối hoặc nhập mã của đối phương. Chỉ cần khi hai người cùng đến điểm hẹn, thời điểm checkout, xuất cảnh xong, nếu bấm kết nối, thiết bị sẽ tự động nhấp nháy cùng một màu sắc độc quyền để nhận ra nhau, có thể nhập tên hoặc ký hiệu riêng để nhận diện mà không lo nhầm lẫn. Nếu ở nơi đông người và không chắc về vị trí, có thể bật tính năng dò qua GPS. Nếu hai người tiến vào phạm vi dưới 20m (chế độ Radar GPS), màn hình sẽ bật nháy sáng. Có hiển thị khoảng cách thực tế dựa vào GPS. Phương thức nháy sáng cảnh báo và hiển thị màu sắc đều có thể điều chỉnh thông qua thiết lập.",
+      guide_content_2: "2. Chức năng Cứu hộ khẩn cấp SOS",
+      guide_desc_2: "Mở nút 'Chia sẻ cấu hình SOS cố định' trong phần Cài đặt ở thiết bị của người già hoặc trẻ nhỏ, sau đó quét để lưu vào danh bạ của bạn. Khi bị lạc giữa đám đông, hãy nhấn Báo động để cưỡng chế kích hoạt tín hiệu nhấp nháy liên tục trên thiết bị của họ.",
+      guide_content_3: "3. Mã Định danh Tạm thời và Cố định",
+      guide_desc_3: "Mã Tạm thời (màn hình chính) tự động thay đổi sau mỗi lần tải trang, thích hợp cho cuộc gặp diễn ra một lần. Mã Cố định (trong Menu) luôn giữ nguyên để cài đặt cho người nhà.",
+      guide_content_4: "4. Công cụ ngoại tuyến hoặc trường hợp khẩn cấp",
+      guide_desc_4: "Ở dưới cùng giao diện, các phím chức năng cho phép thiết bị biến thành đèn nhiều màu cho cảnh báo, báo hiệu xe hỏng hoặc phát tín hiệu chớp SOS mà không cần Internet hay GPS.",
+      empty_contacts: "Chưa có thẻ kết nối."
+    },
+    en: {
+      app: "Beacon", scan: "Camera", enter: "NumPad", contacts: "Address Book", add_desc: "Name / Identifying Label",
+      connect: "Call", close: "Turn off", cancel: "Cancel", error: "PIN must be exactly 6 NUMBERS.",
+      session_code: "Temporary Session", wait: "Connecting channel...", dist: "Radar Target",
+      off_tools: "Offline Survival Kit", off_lamp: "Marker Light", off_sos: "SOS Signal",
+      no_gps: "Surveillance via P2P IP socket active.", 
+      gps_on_hint: "GPS Radar ON: Phones will self-ignite flash if <20m proximity.",
+      gps_off_hint: "GPS Radar OFF: Phones will not flash until you manually hit sync.",
+      pin_hint: "TAP TO INPUT PIN",
+      temp_warn: "This session code regenerates. Only share with today's immediate contacts.",
+      sb_perm_btn: "Reveal Permanent Profile",
+      sb_perm_title: "📌 Fixed Hardware Profile",
+      sb_perm_desc: "Anti-lose tag system. Scan this permanent QR onto an elder/child's phone. If they get lost in a mall, hit ALARM from your contact list to force their device into panic-flash mode instantly.",
+      act_mode_1: "📍 Silent Radar", act_mode_1_sub: "Track distance secretly without flashing.",
+      act_mode_2: "✨ Sync Flash", act_mode_2_sub: "Playful blink to spot in an airport.",
+      act_mode_3: "🚨 FORCE SOS ALARM", act_mode_3_sub: "Panic mode for emergency finding.",
+      hist: "Recent:",
+      guide: "Guide", switch_numpad: "Numpad", clear: "Clear",
+      guide_title: "Beacon P2P Instruction Guide",
+      guide_content_1: "1. Finding people in crowded areas (Airports, Stations)",
+      guide_desc_1: "Beacon replaces traditional paper pickup signs. You can set up a connection list in advance or enter the other party's code. Once both people arrive at the meeting point and connect, the devices will automatically flash an exclusive color to recognize each other. Custom names or symbols can be entered to avoid confusion. If in a crowded place with unsure locations, enable GPS tracking. If both parties enter a 20m radius (GPS Radar mode), the screens will start flashing. Actual distance based on GPS is displayed. Flashing methods and colors can be customized.",
+      guide_content_2: "2. SOS Emergency Rescue",
+      guide_desc_2: "Open 'Reveal Permanent Profile' in Settings on an elder's or child's device, then scan and save it to your address book. When lost in a crowd, press Alarm to strictly force their device to emit a continuous flashing signal.",
+      guide_content_3: "3. Temporary and Permanent ID Codes",
+      guide_desc_3: "The Temporary code (home screen) regenerates every time the page reloads, making it suitable for one-time meetings. The Permanent code (in Menu) stays the same for registering household members.",
+      guide_content_4: "4. Offline tools or emergencies",
+      guide_desc_4: "At the bottom of the interface, shortcut buttons allow the device to become a multi-color warning light, marker light for vehicle breakdown, or SOS strobe without requiring Internet or GPS connectivity.",
+      empty_contacts: "No contacts yet."
+    },
+    ja: {
+      app: "Beacon", scan: "カメラ", enter: "番号入力", contacts: "連絡先", add_desc: "名前 / 識別ラベル",
+      connect: "発信", close: "消灯", cancel: "キャンセル", error: "PINは正確に6桁の数字である必要があります。",
+      session_code: "一時通信コード", wait: "チャンネル検索中...", dist: "レーダー距離",
+      off_tools: "オフラインツールセット", off_lamp: "警告灯", off_sos: "SOS 信号",
+      no_gps: "P2P IP 接続経由で監視中。", 
+      gps_on_hint: "GPSレーダーオン：距離が20m未満になると自動的に発光します。",
+      gps_off_hint: "GPSレーダーオフ：手動でボタンを押すまで発光しません。",
+      pin_hint: "タップして入力",
+      temp_warn: "このコードはセッションごとに変更されます。本日お会いする方のみに共有してください。",
+      sb_perm_btn: "固定SOS設定の共有",
+      sb_perm_title: "📌 固定SOS連絡先システム",
+      sb_perm_desc: "子供や高齢者の端末でこのQRをスキャンして固定設定します。迷子になった際、連絡先から「アラーム」を押すと、相手のデバイスが即座に激しく発光し周囲に知らせます。",
+      act_mode_1: "📍 サイレントレーダー", act_mode_1_sub: "発光せずに密かに距離を測定。",
+      act_mode_2: "✨ 同期発光", act_mode_2_sub: "空港などでの合図として同期して光ります。",
+      act_mode_3: "🚨 強制SOSアラーム", act_mode_3_sub: "緊急時のパニックモード。",
+      hist: "履歴:",
+      guide: "使い方", switch_numpad: "キーパッド", clear: "クリア",
+      guide_title: "Beacon P2P の使い方",
+      guide_content_1: "1. 混雑した場所での待ち合わせ (空港、駅など)",
+      guide_desc_1: "Beaconは従来の紙のプラカードに代わるものです。事前に連絡先を設定するか、相手のコードを入力します。両者が待ち合わせ場所に着いた際、接続を押すだけで両方のデバイスが専用の色で同時に点滅し、簡単に見つけることができます。混乱を避けるため、認識用の名前や記号を入力することも可能です。混雑した場所で位置が不確かな場合は、GPS機能をオンにできます。両者が20m以内 (GPSモード) になると、画面が点滅を始めます。GPSに基づく実際の距離が表示されます。発光のパターンや色は設定から調整可能です。",
+      guide_content_2: "2. SOS 緊急救助",
+      guide_desc_2: "高齢者や子供のデバイスで「固定SOS設定」を開き、連絡先に保存します。迷子になった場合、「アラーム」を押すと強制的に相手の画面を連続点滅させることができます。",
+      guide_content_3: "3. 一時的なIDと固定ID",
+      guide_desc_3: "一時的なコード (ホーム画面) はページをリロードするたびに変わり、一度きりの待ち合わせに適しています。固定コード (メニュー内) は変わらないため、家族の設定に適しています。",
+      guide_content_4: "4. オフラインツールや緊急時",
+      guide_desc_4: "画面下部のボタンを使うと、インターネットやGPSがなくても、デバイスを多色警告灯や車の故障灯、あるいはSOSストロボとして使用できます。",
+      empty_contacts: "連絡先がありません。"
+    },
+    zh: {
+      app: "Beacon", scan: "扫码", enter: "输入号码", contacts: "联系人", add_desc: "姓名 / 标识",
+      connect: "呼叫", close: "关闭灯光", cancel: "取消", error: "PIN必须是准确的6位数字。",
+      session_code: "临时通信代码", wait: "正在连接频道...", dist: "雷达距离",
+      off_tools: "离线生存工具", off_lamp: "警告灯", off_sos: " SOS 信号",
+      no_gps: "通过P2P IP连接监控中。", 
+      gps_on_hint: "GPS 雷达开启：当距离小于20米时，手机会自动发光。",
+      gps_off_hint: "GPS 雷达关闭：系统不会发光，直到您手动按下同步按钮。",
+      pin_hint: "点击输入号码",
+      temp_warn: "此代码在页面刷新后会更改。仅限与今天会面的人分享。",
+      sb_perm_btn: "分享固定SOS设置",
+      sb_perm_title: "📌 固定SOS联系系统",
+      sb_perm_desc: "防走失系统。在老人或小孩的手机上扫描此固定二维码。如果他们走丢了，在联系人中点击强制警报，他们的设备会立即剧烈闪烁以吸引注意。",
+      act_mode_1: "📍 静默雷达", act_mode_1_sub: "秘密测量距离，不发光。",
+      act_mode_2: "✨ 同步闪烁", act_mode_2_sub: "机场接机时同步闪烁。",
+      act_mode_3: "🚨 强制 SOS", act_mode_3_sub: "用于紧急情况。",
+      hist: "历史记录:",
+      guide: "使用指南", switch_numpad: "虚拟键盘", clear: "清除",
+      guide_title: "Beacon P2P 使用指南",
+      guide_content_1: "1. 在拥挤区域寻人 (机场、车站)",
+      guide_desc_1: "Beacon替代传统的纸质接机牌。您可以提前设置联系人列表或输入对方的代码。当双方到达会合点只需点击连接，两台设备就会自动闪烁专属颜色以便相认。您还可以输入自定义名称或符号加以区分。如果在拥挤的地方并且不确定位置，可以开启GPS功能。如果两人相距不到20米（GPS雷达模式），屏幕将开始自动闪烁。系统会显示基于GPS的实际距离。闪烁警告提示及颜色均均支持调整。",
+      guide_content_2: "2. SOS 紧急救援",
+      guide_desc_2: "在老人或小孩的设备上打开“分享固定SOS设置”，扫描并保存到您的联系人中。如果走散，按下警报即可强制对方设备持续闪烁求救信号。",
+      guide_content_3: "3. 临时和固定 ID",
+      guide_desc_3: "临时代码 (主屏幕) 每次刷新都会改变，适合一次性的会面。固定代码 (菜单内) 始终不变，适合给家人设备设置使用。",
+      guide_content_4: "4. 离线工具或紧急情况",
+      guide_desc_4: "在界面底部，快捷按钮使设备可以在不需要网络或GPS的情况下用作多色警告灯、车辆故障灯或SOS频闪灯。",
+      empty_contacts: "暂无联系人。"
+    }
+  };
+
+  // V8 Migration: Generate 6-DIGIT Numeric strings
+  const genCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+  
+  const PALETTE = ['#3B82F6','#10B981','#F59E0B','#8B5CF6', '#EC4899', '#14B8A6'];
+  const calculateBearing = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lat2) return null;
+    const toRad = deg => deg * Math.PI / 180;
+    const toDeg = rad => rad * 180 / Math.PI;
+    const phi1 = toRad(lat1), phi2 = toRad(lat2);
+    const dLambda = toRad(lon2 - lon1);
+    const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+    const y = Math.sin(dLambda) * Math.cos(phi2);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  };
+  const haversine = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lat2) return null;
+    const R = 6371e3, p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+    const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+  };
+
+  function App() {
+    const [lang, setLang] = useState(() => {
+       const uLang = navigator.language?.substring(0,2);
+       return ['vi','en','ja','zh'].includes(uLang) ? uLang : 'en';
+    });
+    const t = DICT[lang];
+
+    const [tempCode, setTempCode] = useState('');
+    const [permCode, setPermCode] = useState('');
+    const [contacts, setContacts] = useState([]);
+    
+    // Numpad configs
+    const [useNativeKb, setUseNativeKb] = useState(false);
+    const [historyList, setHistoryList] = useState([]);
+
+    const [useGps, setUseGps] = useState(true);
+    const [showTemp, setShowTemp] = useState(false);
+    const [sidebar, setSidebar] = useState(false);
+    const [showPermDetail, setShowPermDetail] = useState(false);
+    
+    const [flashMsg, setFlashMsg] = useState(() => localStorage.getItem('beacon_v8_flashmsg') || '');
+    const [flashTarget, setFlashTarget] = useState(() => localStorage.getItem('beacon_v8_flashtarget') || 'BOTH'); // 'REMOTE' , 'BOTH'
+    const [remoteMsg, setRemoteMsg] = useState('');
+
+    const [modal, setModal] = useState(null); // 'QR_TEMP', 'QUICK', 'ADD', 'SCAN', 'CONTACT_INTENT', 'EDIT', 'SHARE_APP'
+    const [scanTarget, setScanTarget] = useState('QUICK'); // track scanner source
+    const [heading, setHeading] = useState(null);
+    const [compassGranted, setCompassGranted] = useState(false);
+    
+    // Inputs
+    const [inputCode, setInputCode] = useState('');     // target PIN
+    const [inputName, setInputName] = useState('');     // saved contact name
+    
+    const [myGreeting, setMyGreeting] = useState(() => localStorage.getItem('beacon_v8_myname') || '');
+    const [selectedContact, setSelectedContact] = useState(null);
+
+    const peerTempRef = useRef(null);
+    const peerPermRef = useRef(null);
+    const activeConnRef = useRef(null);
+    const myPosRef = useRef({lat: null, lng: null});
+    const geoWatchRef = useRef(null);
+
+    const [activeCall, setActiveCall] = useState(null); 
+    const [flashData, setFlashData] = useState(null); // { c, m, s }
+
+    useEffect(() => {
+      let savedPerm = localStorage.getItem('beacon_v8_perm');
+      // If it contains letters (from v6/v7), we force migrate to digits
+      if (!savedPerm || !/^\d{6}$/.test(savedPerm)) { savedPerm = genCode(); localStorage.setItem('beacon_v8_perm', savedPerm); }
+      setPermCode(savedPerm);
+      
+      let savedTemp = sessionStorage.getItem('beacon_v8_temp');
+      if (!savedTemp || !/^\d{6}$/.test(savedTemp)) { savedTemp = genCode(); sessionStorage.setItem('beacon_v8_temp', savedTemp); }
+      setTempCode(savedTemp);
+
+      const savedContacts = localStorage.getItem('beacon_v8_contacts');
+      if (savedContacts) setContacts(JSON.parse(savedContacts));
+
+      const savedHist = localStorage.getItem('beacon_v8_hist');
+      if (savedHist) setHistoryList(JSON.parse(savedHist));
+
+      initDualPeers(savedTemp, savedPerm);
+      
+      return () => {
+         peerTempRef.current?.destroy();
+         peerPermRef.current?.destroy();
+         if(geoWatchRef.current) navigator.geolocation.clearWatch(geoWatchRef.current);
+      }
+    }, []);
+
+    function initDualPeers(tempId, permId) {
+      if(peerTempRef.current) peerTempRef.current.destroy();
+      if(peerPermRef.current) peerPermRef.current.destroy();
+
+      const customConfig = {
+        iceServers: [
+          { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] },
+          { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+        ],
+        sdpSemantics: 'unified-plan'
+      };
+
+      peerTempRef.current = new Peer('bcn8-' + tempId, { debug: 0, config: customConfig, pingInterval: 10000 });
+      peerPermRef.current = new Peer('bcn8-' + permId, { debug: 0, config: customConfig, pingInterval: 10000 });
+      
+      const handleIncoming = (conn, isFixed = false) => {
+        conn.on('open', () => { activeConnRef.current = conn; });
+        conn.on('data', d => {
+          if (d.type === 'HELO') {
+            const peerAlias = d.name || 'Caller';
+            const channelId = d.channelId || Math.random().toString(36).substr(2, 3).toUpperCase();
+            
+            setActiveCall({ name: peerAlias, channelId: channelId, dist: null, isFixed, mode: d.intent });
+            
+            if(conn.open) { 
+                conn.send({ type: 'ACK', name: myGreeting || 'Thiết bị nhận', channelId });
+                
+                // Trigger based on Intent mapped from the Caller
+                if (d.intent === 'SOS') {
+                    const customMsg = d.msg && d.msg.trim() !== '' ? d.msg : 'SOS';
+                    const targetBoth = d.msgTarget !== 'REMOTE';
+                    const fdReceiver = { c: '#DC2626', m: customMsg, s: 'anim-sos' };
+                    const fdCaller = { c: '#DC2626', m: targetBoth ? customMsg : 'SOS', s: 'anim-sos' };
+                    conn.send({type: 'FLASH', ...fdCaller});
+                    setFlashData(fdReceiver);
+                } else if (d.intent === 'SYNC') {
+                    const randomColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+                    const customMsg = d.msg && d.msg.trim() !== '' ? d.msg : 'CHỚP';
+                    const targetBoth = d.msgTarget !== 'REMOTE';
+                    const fdReceiver = { c: randomColor, m: customMsg, s: 'anim-pulse' };
+                    const fdCaller = { c: randomColor, m: targetBoth ? customMsg : 'CHỚP', s: 'anim-pulse' };
+                    conn.send({type: 'FLASH', ...fdCaller});
+                    setFlashData(fdReceiver);
+                }
+            }
+          }
+          if (d.type === 'GPS') {
+            const dp = haversine(myPosRef.current.lat, myPosRef.current.lng, d.lat, d.lng);
+            const br = calculateBearing(myPosRef.current.lat, myPosRef.current.lng, d.lat, d.lng);
+            setActiveCall(s => s ? {...s, dist: dp, bearing: br} : s);
+            
+            // Auto flash triggered by proximity (Only if NOT silent intent)
+            if (dp !== null && dp <= 20 && activeCall?.mode !== 'SILENT') {
+              setFlashData(prev => {
+                if(!prev) { 
+                  const fd = { c: '#3B82F6', m: 'ĐẠT ĐÍCH', s: 'anim-pulse' };
+                  if(activeConnRef.current?.open) activeConnRef.current.send({type: 'FLASH', ...fd});
+                  return fd;
+                }
+                return prev;
+              });
+            }
+          }
+          if (d.type === 'FLASH') setFlashData({ c: d.c, m: d.m, s: d.s || 'anim-pulse' });
+          if (d.type === 'END') endSession();
+        });
+        conn.on('close', endSession);
+        conn.on('error', endSession);
+      };
+
+      const handlePeerError = (err) => {
+          if (err.type === 'peer-unavailable') {
+              if (activeConnRef.current) {
+                  alert("Mã kết nối không tồn tại hoặc đối phương đang mất sóng!");
+                  endSession();
+              }
+          }
+      };
+
+      peerTempRef.current.on('connection', c => handleIncoming(c, false));
+      peerTempRef.current.on('error', handlePeerError);
+      
+      peerPermRef.current.on('connection', c => handleIncoming(c, true));
+      peerPermRef.current.on('error', handlePeerError);
+    }
+
+    function refreshSession() {
+        if(!confirm("Gia hạn và tạo mã phiên mới? Mã hiện tại sẽ không thể liên lạc được nữa.")) return;
+        const newTemp = genCode();
+        sessionStorage.setItem('beacon_v8_temp', newTemp);
+        setTempCode(newTemp);
+        initDualPeers(newTemp, permCode);
+    }
+
+    // GPS loop based on Toggle
+
+    const handleOrientation = (e) => {
+        let alpha = null;
+        if (e.webkitCompassHeading) {
+            alpha = e.webkitCompassHeading;
+        } else if (e.absolute && e.alpha !== null) {
+            alpha = Math.abs(e.alpha - 360);
+        }
+        if (alpha !== null) setHeading(alpha);
+    };
+
+    const requestCompass = () => {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        setCompassGranted(true);
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                    } else { alert("Đã từ chối quyền la bàn!"); }
+                })
+                .catch(console.error);
+        } else {
+            setCompassGranted(true);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    };
+
+    useEffect(() => {
+        return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+    }, []);
+
+    useEffect(() => {
+      // Clear previous watch safely
+      if(geoWatchRef.current) { navigator.geolocation.clearWatch(geoWatchRef.current); geoWatchRef.current = null; }
+      
+      if (useGps && activeCall && !flashData && navigator.geolocation) {
+        geoWatchRef.current = navigator.geolocation.watchPosition(p => {
+          myPosRef.current = { lat: p.coords.latitude, lng: p.coords.longitude };
+          if(activeConnRef.current?.open) {
+             activeConnRef.current.send({ type: 'GPS', lat: p.coords.latitude, lng: p.coords.longitude });
+          }
+        }, () => {}, { enableHighAccuracy: true });
+      }
+    }, [activeCall !== null, flashData !== null, useGps]);
+
+    function saveHistory(code) {
+        setHistoryList(p => {
+            const newList = [code, ...p.filter(x => x !== code)].slice(0, 4);
+            localStorage.setItem('beacon_v8_hist', JSON.stringify(newList));
+            return newList;
+        });
+    }
+
+    // CALL API with Intents: 'SILENT' | 'SYNC' | 'SOS'
+    function callPeer(code, peerAlias, intent = 'SYNC') {
+      if(!peerTempRef.current || activeCall) return;
+      if(code.length !== 6) return alert(t.error);
+
+      localStorage.setItem('beacon_v8_myname', myGreeting);
+      saveHistory(code);
+
+      const conn = peerTempRef.current.connect('bcn8-' + code, { reliable: false });
+      activeConnRef.current = conn;
+
+      setTimeout(() => {
+          if (activeConnRef.current === conn && !conn.open) {
+              alert("Kết nối thất bại. Máy đối phương đã tắt, mã sai hoặc mạng chậm.");
+              endSession();
+          }
+      }, 10000);
+      
+      const sessionChannel = Math.random().toString(36).substr(2, 3).toUpperCase();
+      
+      setActiveCall({ name: peerAlias || "Hệ thống ẩn danh", channelId: sessionChannel, dist: null, isFixed:false, mode: intent });
+      
+      conn.on('open', () => conn.send({ type: 'HELO', name: myGreeting || 'Người Tìm Kiếm', channelId: sessionChannel, intent: intent, msg: flashMsg, msgTarget: flashTarget }));
+      
+      conn.on('data', d => {
+        if(d.type === 'ACK') {
+           setActiveCall(s => s ? {...s, channelId: d.channelId || s.channelId} : s);
+        }
+        if (d.type === 'GPS') {
+            const dp = haversine(myPosRef.current.lat, myPosRef.current.lng, d.lat, d.lng);
+            const br = calculateBearing(myPosRef.current.lat, myPosRef.current.lng, d.lat, d.lng);
+            setActiveCall(s => s ? {...s, dist: dp, bearing: br} : s);
+            
+            if (dp !== null && dp <= 20 && intent !== 'SILENT') {
+              setFlashData(prev => {
+                if(!prev) { 
+                  const fd = { c: '#10B981', m: 'TỚI NƠI', s: 'anim-pulse' };
+                  if(activeConnRef.current?.open) activeConnRef.current.send({type: 'FLASH', ...fd});
+                  return fd;
+                }
+                return prev;
+              });
+            }
+        }
+        if (d.type === 'FLASH') setFlashData({ c: d.c, m: d.m, s: d.s || 'anim-pulse' });
+        if (d.type === 'END') endSession();
+      });
+      conn.on('close', endSession);
+      conn.on('error', () => { alert("Lỗi Timeout / Thiết bị chưa Online."); endSession(); });
+    }
+
+    function endSession() {
+      if(activeConnRef.current && activeConnRef.current.open) {
+          try { activeConnRef.current.send({type:'END'}); activeConnRef.current.close(); } catch(e){}
+      }
+      activeConnRef.current = null;  setActiveCall(null); setFlashData(null); 
+    }
+
+    function forceFlash() {
+      const c = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+      const fd = { c, m: 'CẢNH BÁO', s: 'anim-pulse' };
+      if(activeConnRef.current?.open) try { activeConnRef.current.send({ type: 'FLASH', ...fd }); } catch(e) {}
+      setFlashData(fd); 
+    }
+
+    function triggerOfflineLamp() { setFlashData({ c: '#FACC15', m: 'ĐÈN', s: 'anim-pulse' }); }
+    function triggerOfflineSOS() { setFlashData({ c: 'var(--red-600)', m: 'SOS', s: 'anim-sos' }); }
+    
+    function deleteContact(id) {
+        if(confirm("Xóa thẻ này?")) {
+            const nc = contacts.filter(c => c.id !== id);
+            setContacts(nc); localStorage.setItem('beacon_v8_contacts', JSON.stringify(nc));
+        }
+    }
+
+    function handleSaveContact() {
+        if(!inputName.trim() || inputCode.length !== 6) return alert(t.error);
+        const targetId = modal === 'EDIT' && selectedContact ? selectedContact.id : inputCode;
+        const flt = contacts.filter(c => c.id !== targetId && c.id !== inputCode);
+        const nc = [{ id: inputCode, name: inputName }, ...flt]; 
+        setContacts(nc); localStorage.setItem('beacon_v8_contacts', JSON.stringify(nc));
+        setModal(null); setInputName(''); setInputCode(''); setSelectedContact(null);
+    }
+
+    const html5QrcodeScannerRef = useRef(null);
+    useEffect(() => {
+        if (modal === 'SCAN') {
+            html5QrcodeScannerRef.current = new Html5Qrcode("reader");
+            html5QrcodeScannerRef.current.start(
+                { facingMode: "environment" },
+                { fps: 15 }, // Removed qrbox completely for full bleed fast capture
+                (text) => {
+                    const parsed = text.replace(/[^0-9]/ig, '');
+                    if(parsed.length >= 6) {
+                        const codeObj = parsed.slice(-6);
+                        html5QrcodeScannerRef.current.stop().then(() => {
+                            html5QrcodeScannerRef.current.clear();
+                            setInputCode(codeObj);
+                            setModal(scanTarget);
+                        });
+                    }
+                },
+                () => {}
+            ).catch(() => { alert("Lỗi camera. Vui lòng bật mạng HTTPS."); setModal(null); });
+        }
+        return () => {
+            if (html5QrcodeScannerRef.current && html5QrcodeScannerRef.current.isScanning) {
+                html5QrcodeScannerRef.current.stop().then(()=>html5QrcodeScannerRef.current.clear()).catch(()=>{});
+            }
+        };
+    }, [modal]);
+
+    // Format display PIN
+    const fmt = str => str ? `${str.slice(0,3)}-${str.slice(3,6)}` : '';
+
+    // RENDER: Flashing state
+    if (flashData) {
+      return (
+        <div className={`flash-screen ${flashData.s}`} style={{background: flashData.c}}>
+          {activeCall && <div style={{fontWeight:900, fontSize:22, marginBottom:10, opacity:0.9, letterSpacing:2 }}>{activeCall.name}</div>}
+          <div className="flash-code">{flashData.m}</div>
+          {activeCall && <div style={{fontWeight:800, fontSize:15, opacity:0.8, letterSpacing:4, marginTop:10}}>Kênh: #{activeCall.channelId}</div>}
+          <button className="btn-full" style={{position:'absolute', bottom:40, width:'80%', background:'rgba(0,0,0,0.5)', color:'white', border:'2px solid rgba(255,255,255,0.2)', padding: 18}} onClick={endSession}>{t.close}</button>
+        </div>
+      );
+    }
+
+    // RENDER: Active connection state
+    if (activeCall) {
+       return (
+        <div style={{padding:24, textAlign:'center', paddingTop: 60, flex: 1, display:'flex', flexDirection:'column'}}>
+          <div style={{background: 'var(--white)', padding: 24, borderRadius: 24, boxShadow: 'var(--shadow-sm)'}}>
+              <div style={{color:'var(--slate-500)', fontSize: 13, fontWeight:800, letterSpacing:1, marginBottom:10, textTransform:'uppercase'}}>
+                  {activeCall.mode === 'SILENT' ? "Radar Vị Trí" : (activeCall.mode === 'SOS' ? 'SOS Khẩn cấp' : 'Kết nối Đồng bộ')}
+              </div>
+              <h2 style={{color: 'var(--indigo-600)', fontSize:28, fontWeight: 900}}>{activeCall.name}</h2>
+              <div style={{color: 'var(--slate-500)', fontWeight: 600, marginTop:10}}>Kênh Ẩn danh: <span style={{color:'var(--slate-800)', fontWeight:900, background:'var(--slate-100)', padding:'4px 10px', borderRadius:8}}>#{activeCall.channelId}</span></div>
+          </div>
+          
+          <div style={{margin:'auto 0'}}>
+             {useGps && activeCall.dist !== null && (
+                 <div style={{display:'flex', flexDirection:'column', alignItems:'center', marginBottom: 20}}>
+                     <div style={{
+                         width: 80, height: 80, borderRadius:'50%', background:'var(--white)', display:'flex', alignItems:'center', justifyContent:'center', border: '5px solid var(--indigo-50)',
+                         transform: heading !== null && activeCall.bearing !== null ? `rotate(${activeCall.bearing - heading}deg)` : 'rotate(0deg)',
+                         transition: 'transform 0.5s ease-out', boxShadow:'0 6px 15px rgba(37,99,235,0.1)'
+                     }}>
+                        <span style={{fontSize: 48, color:'var(--indigo-600)', marginTop:-4, fontWeight:900, textShadow:'0 2px 4px rgba(0,0,0,0.1)'}}>↑</span>
+                     </div>
+                     {(!compassGranted || heading === null) && (
+                         <button onClick={requestCompass} style={{marginTop: 15, background:'var(--slate-800)', color:'white', padding:'8px 16px', borderRadius:20, fontSize:12, fontWeight:800}}>Bật quyền La bàn</button>
+                     )}
+                 </div>
+             )}
+             <div style={{fontSize:'4.5rem', fontWeight:900, color:'var(--slate-800)', letterSpacing:-2, marginTop: -10}}>
+               {useGps && activeCall.dist !== null ? `${activeCall.dist}m` : (useGps ? 'Radar...' : 'IP-Link')}
+             </div>
+             
+             <p style={{background: 'var(--slate-100)', color:'var(--slate-600)', padding: 16, borderRadius: 12, fontWeight:600, fontSize: 13, marginTop: 24, lineHeight: 1.6}}>
+                 {useGps ? t.gps_on_hint : t.gps_off_hint}
+             </p>
+          </div>
+          
+          <div style={{marginBottom: 20}}>
+             <button className="btn-full" style={{background:'var(--indigo-600)', color:'white', marginBottom:12, padding: 20, fontSize: 16, boxShadow: '0 6px 20px rgba(37, 99, 235, 0.4)', textTransform:'uppercase', letterSpacing:1}} onClick={forceFlash}>✨ VẪY ĐÈN ĐỒNG BỘ</button>
+             <button className="btn-full btn-secondary" style={{padding:20}} onClick={endSession}>{t.close}</button>
+          </div>
+        </div>
+      );
+    }
+
+    // RENDER: Main interface
+    return (
+      <>
+        <div className="app-header">
+           <button className="header-btn" onClick={()=>setSidebar(true)}>
+              <span className="header-icon">☰</span>
+           </button>
+           <span className="app-name">Beacon</span>
+           <div style={{display:'flex', gap: 5}}>
+               <button className="header-btn" onClick={()=>setModal('SHARE_APP')} style={{fontSize: 20}}>
+                  🎁
+               </button>
+               <button className="header-btn" onClick={()=>setModal('GUIDE')} style={{fontSize: 14, fontWeight: 900, background: 'var(--indigo-50)', padding: '6px 12px', borderRadius: 20, color: 'var(--indigo-600)'}}>
+                  📖 {t.guide}
+               </button>
+           </div>
+        </div>
+
+        <div className="identity-card">
+           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+               <div style={{fontSize:12, opacity:0.9, textTransform:'uppercase', fontWeight:800, letterSpacing:1}}>
+                  {t.session_code}
+               </div>
+               <button className="btn-refresh" onClick={refreshSession} title="Tạo Mã Mới">
+                 <span style={{fontSize:18}}>⟳</span>
+               </button>
+           </div>
+           
+           <div className="identity-code" style={{cursor: 'pointer'}} onClick={()=>setShowTemp(!showTemp)}>
+              {showTemp ? fmt(tempCode) : '•••-•••'} 
+              <span style={{fontSize: 18, marginLeft: 10, opacity: 0.6}}>{showTemp ? '👁️' : '🙈'}</span>
+           </div>
+           
+           <div style={{marginTop: 10}}>
+             <button onClick={()=>setModal('QR_TEMP')} style={{background: 'rgba(255,255,255,0.2)', padding: '8px 16px', borderRadius: 20, color: 'white', fontWeight: 700, border: '1px solid rgba(255,255,255,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6}}>
+                <span style={{fontSize: 18}}>📷</span> QR Code
+             </button>
+           </div>
+
+           <div style={{marginTop: 16, fontSize: 13, lineHeight: 1.5, opacity: 0.9, background:'rgba(0,0,0,0.15)', padding:'12px 16px', borderRadius:10, fontWeight:500}}>
+              {t.temp_warn}
+           </div>
+        </div>
+
+        <div className="section action-row">
+           <button className="btn-action btn-primary" onClick={()=>{setScanTarget('QUICK'); setModal('SCAN')}}>
+             <span style={{fontSize: 24}}>📷</span> {t.scan}
+           </button>
+           <button className="btn-action btn-secondary" onClick={()=>setModal('QUICK')}>
+             <span style={{fontSize: 24}}>Dial</span> {t.enter}
+           </button>
+        </div>
+
+        {/* Contacts */}
+        <div className="section" style={{marginBottom: 10}}>
+           <div style={{display:'flex', justifyContent:'space-between', marginBottom:14, alignItems:'center'}}>
+              <span className="section-title" style={{marginBottom:0}}>{t.contacts}</span>
+              <button style={{color:'var(--indigo-600)', background:'var(--indigo-50)', padding:'6px 14px', borderRadius:20, fontWeight:800, fontSize:12, border:'1px solid var(--indigo-100)'}} onClick={()=>setModal('ADD')}>+ Mới</button>
+           </div>
+           
+           {contacts.length === 0 ? (
+               <div style={{background:'var(--white)', border:'2px dashed var(--slate-200)', borderRadius:'var(--radius-lg)', padding:30, textAlign:'center', color:'var(--slate-400)', fontWeight: 600, fontSize:13}}>
+                  {t.empty_contacts}
+               </div>
+           ) : (
+               <div className="contacts-card">
+                  {contacts.map(c => (
+                    <div className="contact-item" onClick={()=>{setSelectedContact(c); setModal('CONTACT_INTENT')}} key={c.id}>
+                       <div className="contact-avatar">{c.name.charAt(0).toUpperCase()}</div>
+                       <div style={{flex:1, overflow:'hidden'}}>
+                         <div style={{fontWeight:800, fontSize:15, textOverflow:'ellipsis', whiteSpace:'nowrap', overflow:'hidden', color:'var(--slate-800)'}}>{c.name}</div>
+                         <div style={{fontSize:12, color:'var(--slate-500)', letterSpacing: 1, marginTop: 4, fontWeight:600}}>PIN: ••••••</div>
+                       </div>
+                       
+                       <button className="btn-connect" style={{background:'var(--indigo-50)', border:'none', color:'var(--indigo-600)'}}>Menu 👉</button>
+                    </div>
+                  ))}
+               </div>
+           )}
+        </div>
+
+        {/* Offline Tools */}
+        <div className="section">
+           <div className="section-title" style={{color:'var(--slate-500)', marginTop: 10}}>{t.off_tools}</div>
+           <div style={{display:'flex', gap: 10}}>
+              <button className="btn-action" style={{background:'var(--slate-800)', color:'white'}} onClick={triggerOfflineLamp}>🔦 {t.off_lamp}</button>
+              <button className="btn-action" style={{background:'var(--red-600)', color:'white'}} onClick={triggerOfflineSOS}>🚨 SOS</button>
+           </div>
+        </div>
+
+        {/* --- Sidebar Area --- */}
+        <div className={`sidebar ${sidebar ? 'open' : ''}`}>
+           <div className="sidebar-mask" onClick={()=>{setSidebar(false); setShowPermDetail(false);}}></div>
+           <div className="sidebar-content">
+              
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+                 <h3 style={{color:'var(--indigo-600)', fontSize: 22, fontWeight: 900}}>Cài đặt & Hướng dẫn</h3>
+                 <button onClick={()=>{setSidebar(false); setShowPermDetail(false);}} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)'}}>✕</button>
+              </div>
+
+              {/* PERMANENT ID BLOCK IN SIDEBAR */}
+              {!showPermDetail ? (
+                 <button className="btn-full" style={{background:'var(--indigo-50)', color:'var(--indigo-700)', border: '1px solid var(--indigo-100)', marginBottom: 24, padding: '16px', display: 'flex', alignItems:'center', justifyContent:'center', gap:'8px'}} onClick={() => setShowPermDetail(true)}>
+                    <span style={{fontSize:18}}>🛡️</span><span style={{fontWeight:800, fontSize: 13}}>{t.sb_perm_btn}</span>
+                 </button>
+              ) : (
+                 <div style={{background: 'var(--white)', border: '2px solid var(--indigo-200)', borderRadius: 16, padding: 18, marginBottom: 24, boxShadow: '0 4px 15px rgba(37,99,235,0.1)'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                        <div style={{color:'var(--indigo-600)', fontWeight: 800, fontSize: 12, textTransform:'uppercase', letterSpacing:1}}>{t.sb_perm_title}</div>
+                        <button onClick={() => {if(confirm("Tạo mới sẽ vô hiệu hóa các liên kết cũ?")){setPermCode(genCode());}}} style={{background:'var(--slate-100)', padding:'6px 10px', borderRadius:8, fontSize:12, fontWeight:800}}>⟳ Reset</button>
+                    </div>
+                    
+                    <div style={{margin:'14px 0 8px', padding: '16px 0', background:'var(--slate-50)', borderRadius: 12, textAlign:'center'}}>
+                       <canvas ref={c => { if(c) new QRious({element: c, value: permCode, size: 180}); }}></canvas>
+                       <div style={{color:'var(--slate-800)', fontWeight: 900, fontSize: 32, letterSpacing: 4, marginTop:10}}>{fmt(permCode)}</div>
+                    </div>
+                    <p style={{fontSize: 12, color: 'var(--slate-500)', lineHeight: 1.5, marginTop: 10}}>{t.sb_perm_desc}</p>
+                 </div>
+              )}
+
+              <select value={lang} onChange={e=>setLang(e.target.value)} style={{padding: '14px', borderRadius:12, border:'2px solid var(--slate-200)', fontWeight: 700, background: 'var(--white)', width: '100%', outline: 'none', appearance:'none', marginBottom: 20}}>
+                 <option value="vi">🇻🇳 Giao diện: Tiếng Việt</option>
+                 <option value="en">🇬🇧 Giao diện: English</option>
+                 <option value="ja">🇯🇵 Giao diện: 日本語</option>
+                 <option value="zh">🇨🇳 Giao diện: 中文</option>
+               </select>
+
+               {/* Add GPS Global toggle to settings */}
+               <label style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding: '16px', background:'var(--slate-50)', borderRadius:12, border:'1px solid var(--slate-200)', cursor:'pointer'}}>
+                  <div>
+                    <div style={{fontWeight: 800, color: 'var(--slate-800)', fontSize: 14}}>Đo Lường Radar (GPS)</div>
+                    <div style={{fontSize:11, color:'var(--slate-500)', marginTop:4}}>Hỗ trợ nhận biết khoảng cách xa gần.</div>
+                  </div>
+                  <div className="switch">
+                      <input type="checkbox" checked={useGps} onChange={e=>setUseGps(e.target.checked)}/>
+                      <span className="slider"></span>
+                  </div>
+               </label>
+           </div>
+        </div>
+
+
+        {/* ========================================= */}
+        {/* MODALS OVERHAUL */}
+        {/* ========================================= */}
+
+
+        {/* Contact INTENT Action Sheet */}
+        {modal === 'CONTACT_INTENT' && selectedContact && (
+            <div className="modal-overlay" onClick={()=>setModal(null)}>
+                <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{padding: '30px 24px'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+                        <div>
+                            <div style={{fontSize:14, color:'var(--slate-400)', fontWeight:700, letterSpacing:1}}>THAO TÁC CỤ THỂ</div>
+                            <h3 style={{fontSize:24, fontWeight:900, color:'var(--slate-800)'}}>{selectedContact.name}</h3>
+                        </div>
+                        <button onClick={()=>setModal(null)} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)', background:'var(--slate-100)', width:40, height:40, borderRadius:20}}>✕</button>
+                    </div>
+
+                    <input className="input-field-native" style={{marginBottom: 15, width: '100%', fontSize: 13, background:'var(--indigo-50)', padding:'14px', borderRadius: 12, border: '1px solid var(--indigo-100)', color: 'var(--indigo-800)', fontWeight: 600}} 
+                           placeholder={['Nhập tin nhắn kèm (VD: Đang ở cổng 3)','Custom text on flash screen...','メッセージを入力','输入附加消息'][['vi','en','ja','zh'].indexOf(lang)||0]}
+                           value={flashMsg} onChange={e=>{setFlashMsg(e.target.value); localStorage.setItem('beacon_v8_flashmsg', e.target.value)}} />
+
+                    <div style={{display:'flex', gap: 10, marginBottom: 15}}>
+                       <div onClick={()=>{setFlashTarget('REMOTE'); localStorage.setItem('beacon_v8_flashtarget', 'REMOTE')}} style={{flex:1, padding:'10px', borderRadius:8, border: flashTarget === 'REMOTE' ? '2px solid var(--indigo-500)' : '2px solid var(--slate-200)', background: flashTarget === 'REMOTE' ? 'var(--indigo-50)' : 'white', textAlign:'center', cursor:'pointer', fontSize:12, fontWeight:700, color: flashTarget === 'REMOTE' ? 'var(--indigo-700)' : 'var(--slate-500)'}}>
+                           {['👉 Chỉ Máy Đích','👉 Remote Only','👉 相手のみ','👉 仅接收方'][['vi','en','ja','zh'].indexOf(lang)||0]}
+                       </div>
+                       <div onClick={()=>{setFlashTarget('BOTH'); localStorage.setItem('beacon_v8_flashtarget', 'BOTH')}} style={{flex:1, padding:'10px', borderRadius:8, border: flashTarget === 'BOTH' ? '2px solid var(--indigo-500)' : '2px solid var(--slate-200)', background: flashTarget === 'BOTH' ? 'var(--indigo-50)' : 'white', textAlign:'center', cursor:'pointer', fontSize:12, fontWeight:700, color: flashTarget === 'BOTH' ? 'var(--indigo-700)' : 'var(--slate-500)'}}>
+                           {['🔁 Cả 2 Đồng Bộ','🔁 Both Synced','🔁 両方同期','🔁 双方同步'][['vi','en','ja','zh'].indexOf(lang)||0]}
+                       </div>
+                    </div>
+
+                    <div style={{display: 'flex', gap: 10, marginBottom: 20}}>
+                        <button className="btn-full" onClick={()=>{setInputName(selectedContact.name); setInputCode(selectedContact.id); setModal('EDIT');}} style={{background:'var(--slate-100)', color:'var(--slate-800)', padding:'14px', fontSize:14}}><span style={{fontSize: 18}}>✏️</span> {['Chỉnh sửa','Edit','編集','编辑'][['vi','en','ja','zh'].indexOf(lang)||0]}</button>
+                    </div>
+
+                    <div style={{display:'flex', flexDirection:'column', gap:12, marginBottom:24}}>
+                        <button className="btn-action" onClick={()=>{callPeer(selectedContact.id, selectedContact.name, 'SILENT'); setModal(null);}} style={{background:'var(--white)', border:'2px solid var(--slate-200)', justifyContent:'flex-start', padding:'20px'}}>
+                            <span style={{fontSize:24}}>📍</span> 
+                            <div style={{textAlign:'left'}}>
+                                <div style={{color:'var(--slate-800)', fontWeight:900, fontSize:15}}>{t.act_mode_1}</div>
+                                <div style={{color:'var(--slate-500)', fontSize:12, marginTop:4, fontWeight:600}}>{t.act_mode_1_sub}</div>
+                            </div>
+                        </button>
+
+                        <button className="btn-action" onClick={()=>{callPeer(selectedContact.id, selectedContact.name, 'SYNC'); setModal(null);}} style={{background:'var(--indigo-50)', border:'2px solid var(--indigo-200)', justifyContent:'flex-start', padding:'20px'}}>
+                            <span style={{fontSize:24}}>✨</span> 
+                            <div style={{textAlign:'left'}}>
+                                <div style={{color:'var(--indigo-700)', fontWeight:900, fontSize:15}}>{t.act_mode_2}</div>
+                                <div style={{color:'var(--indigo-500)', fontSize:12, marginTop:4, fontWeight:600}}>{t.act_mode_2_sub}</div>
+                            </div>
+                        </button>
+
+                        <button className="btn-action" onClick={()=>{if(confirm("Xác nhận kích nổ còi đèn từ xa? Máy bên kia sẽ vang lớn.")){callPeer(selectedContact.id, selectedContact.name, 'SOS'); setModal(null);}}} style={{background:'var(--red-500)', border:'none', justifyContent:'flex-start', padding:'20px', boxShadow:'0 4px 15px rgba(239, 68, 68, 0.4)'}}>
+                            <span style={{fontSize:24}}>🚨</span> 
+                            <div style={{textAlign:'left'}}>
+                                <div style={{color:'white', fontWeight:900, fontSize:15}}>{t.act_mode_3}</div>
+                                <div style={{color:'rgba(255,255,255,0.8)', fontSize:12, marginTop:4, fontWeight:600}}>{t.act_mode_3_sub}</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <button className="btn-full" onClick={()=>{deleteContact(selectedContact.id); setModal(null);}} style={{background:'transparent', color:'var(--slate-500)', fontSize:14, padding:10}}>🗑️ Xóa liên hệ này</button>
+                </div>
+            </div>
+        )}
+
+        {/* QR Temporary Code */}
+        {modal === 'QR_TEMP' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{alignItems:'center'}}>
+               <h3 style={{marginBottom: 10, fontSize:18, fontWeight:800}}>{t.session_code}</h3>
+               <div style={{margin:'10px 0', padding: 24, background:'white', borderRadius: 24, border:'2px solid var(--slate-200)', boxShadow:'var(--shadow-md)'}}>
+                  <canvas ref={c => { if(c) new QRious({element: c, value: tempCode, size: 240}); }}></canvas>
+               </div>
+               <h2 style={{letterSpacing:8, fontSize: 36, fontWeight: 900, color:'var(--indigo-600)'}}>{fmt(tempCode)}</h2>
+               <button className="btn-full btn-secondary" style={{marginTop: 30}} onClick={()=>setModal(null)}>{t.close}</button>
+            </div>
+          </div>
+        )}
+
+        {/* Guide Modal */}
+        {modal === 'GUIDE' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{padding: '30px 20px', background: 'var(--slate-50)'}}>
+               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+                  <h3 style={{fontSize:22, fontWeight:900, color: 'var(--indigo-600)'}}>{t.guide_title}</h3>
+                  <button onClick={()=>setModal(null)} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)'}}>✕</button>
+               </div>
+               
+               <div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+                 <div className="guide-card">
+                    <div className="guide-title">{t.guide_content_1}</div>
+                    <p style={{color: 'var(--slate-600)', lineHeight: 1.5}}>{t.guide_desc_1}</p>
+                 </div>
+                 <div className="guide-card guide-card-green">
+                    <div className="guide-title" style={{color: 'var(--green-500)'}}>{t.guide_content_2}</div>
+                    <p style={{color: 'var(--slate-600)', lineHeight: 1.5}}>{t.guide_desc_2}</p>
+                 </div>
+                 <div className="guide-card">
+                    <div className="guide-title">{t.guide_content_3}</div>
+                    <p style={{color: 'var(--slate-600)', lineHeight: 1.5}}>{t.guide_desc_3}</p>
+                 </div>
+                 <div className="guide-card">
+                    <div className="guide-title">{t.guide_content_4}</div>
+                    <p style={{color: 'var(--slate-600)', lineHeight: 1.5}}>{t.guide_desc_4}</p>
+                 </div>
+               </div>
+
+               <button className="btn-full btn-primary" style={{marginTop: 20}} onClick={()=>setModal(null)}>OK</button>
+            </div>
+          </div>
+        )}
+
+        {/* Live Scanner Full Bleed */}
+        <div style={{display: modal === 'SCAN' ? 'block' : 'none'}}>
+            <div className="modal-overlay" onClick={()=>setModal(null)}>
+                <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{height:'100vh', borderRadius:0, padding: 0}}>
+                   <div style={{position:'absolute', top: 20, left:20, right:20, zIndex:10, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                     <h3 style={{fontSize:20, fontWeight:900, color:'white', textShadow:'0 2px 4px rgba(0,0,0,0.5)'}}>Quét Mã</h3>
+                     <button onClick={()=>setModal(null)} style={{fontSize:24, fontWeight:900, color:'white', background:'rgba(0,0,0,0.5)', width:44, height:44, borderRadius:22}}>✕</button>
+                   </div>
+                   <div id="reader"></div>
+                </div>
+            </div>
+        </div>
+
+
+        {/* Contact Addition Module */}
+        {modal === 'ADD' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{padding: '30px 20px', paddingBottom: '40px'}}>
+               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+                  <h3 style={{fontSize:22, fontWeight:900}}>{t.contacts}</h3>
+                  <button onClick={()=>{setModal(null); setInputCode(''); setInputName('')}} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)'}}>✕</button>
+               </div>
+
+               <label style={{fontSize:13, fontWeight:800, color:'var(--slate-800)', marginBottom:10, display:'block'}}>{t.add_desc}</label>
+               <input className="input-field-native" placeholder="Gồm chữ cái, emoji..." value={inputName} onChange={e=>setInputName(e.target.value)} style={{marginBottom:16, fontSize:15, padding:14, background:'var(--slate-50)', border:'2px solid var(--slate-200)', borderRadius:'12px', width:'100%'}} />
+
+               <label style={{fontSize:13, fontWeight:800, color:'var(--slate-800)', marginBottom:8, display:'block'}}>Mã thiết bị (6 SỐ)</label>
+               
+               <div style={{display:'flex', alignItems: 'stretch', gap: 8, marginBottom: 16}}>
+                   {!useNativeKb ? (
+                       <div className={`input-field-fake ${inputCode.length === 0 ? 'empty' : ''}`} style={{flex: 1, minHeight: 50, padding: 12}}>
+                           {inputCode.length > 0 ? fmt(inputCode) : t.pin_hint}
+                       </div>
+                   ) : (
+                       <input className="input-field-native" type="number" pattern="[0-9]*" inputMode="numeric" placeholder={t.pin_hint} value={inputCode} 
+                              onChange={e => setInputCode(e.target.value.replace(/[^0-9]/g, '').slice(0,6))} style={{flex: 1, minWidth: 0, padding: 12, minHeight: 50}} autoFocus={false} />
+                   )}
+                   <button onClick={()=>{setScanTarget('ADD'); setModal('SCAN');}} style={{padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'var(--slate-800)', color: 'white', fontSize: 18}}>📷</button>
+                   <button onClick={()=>setInputCode('')} style={{padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'var(--slate-100)', fontWeight: 800, fontSize: 13, color: 'var(--red-600)', border: '2px solid var(--slate-200)'}}>{t.clear}</button>
+               </div>
+
+               {!useNativeKb ? (
+                   <div className="numpad" style={{gap:8, marginTop: 0}}>
+                       {[1,2,3,4,5,6,7,8,9].map(n => (
+                           <button className="num-btn" key={n} style={{padding: 12, fontSize: 20}} onClick={()=>setInputCode(p => (p+n).slice(0,6))}>{n}</button>
+                       ))}
+                       <button className="num-btn" style={{padding: 12, fontSize:16, background:'var(--slate-50)'}} onClick={()=>setUseNativeKb(true)}>⌨️</button>
+                       <button className="num-btn" style={{padding: 12, fontSize:20}} onClick={()=>setInputCode(p => (p+'0').slice(0,6))}>0</button>
+                       <button className="num-btn" style={{padding: 12, fontSize:18, background:'var(--red-50)', color:'var(--red-600)'}} onClick={()=>setInputCode(p=>p.slice(0,-1))}>⌫</button>
+                   </div>
+               ) : (
+                   <div style={{textAlign: 'center', marginBottom: 10}}>
+                       <button onClick={()=>setUseNativeKb(false)} style={{padding: '10px 20px', borderRadius: '24px', border: '2px solid var(--slate-200)', background: 'var(--slate-50)', fontWeight: 800, color: 'var(--slate-800)', fontSize: 13}}>🔢 {t.switch_numpad}</button>
+                   </div>
+               )}
+
+               <div style={{display:'flex', gap:10, marginTop: 10}}>
+                   <button className="btn-full btn-primary" style={{padding:16, boxShadow:'0 4px 10px rgba(37,99,235,0.4)', borderRadius:'12px'}} onClick={handleSaveContact}>💾 Lưu Thẻ Nhớ</button>
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contact Edit Module */}
+        {modal === 'EDIT' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 24}}>
+                  <h3 style={{fontSize:22, fontWeight:900}}>{['Sửa liên hệ','Edit Contact','連絡先を編集','编辑联系人'][['vi','en','ja','zh'].indexOf(lang)||0]}</h3>
+                  <button onClick={()=>setModal(null)} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)'}}>✕</button>
+               </div>
+
+               <label style={{fontSize:13, fontWeight:800, color:'var(--slate-800)', marginBottom:10, display:'block'}}>{t.add_desc}</label>
+               <input className="input-field-native" style={{marginBottom:20, fontSize:16, fontWeight:600}} placeholder="Ghi chú người này..." value={inputName} onChange={e=>setInputName(e.target.value)} autoFocus />
+
+               <label style={{fontSize:13, fontWeight:800, color:'var(--slate-800)', marginBottom:10, display:'block'}}>Mã thiết bị (6 SỐ)</label>
+               <input className="input-field-native" type="number" pattern="[0-9]*" inputMode="numeric" placeholder="XXXXXX" value={inputCode} 
+                      onChange={e => setInputCode(e.target.value.replace(/[^0-9]/g, '').slice(0,6))} />
+
+               <div style={{display:'flex', gap:10, marginTop: 30}}>
+                   <button className="btn-full btn-primary" onClick={handleSaveContact}>💾 {['Lưu thay đổi','Save Changes','変更を保存','保存更改'][['vi','en','ja','zh'].indexOf(lang)||0]}</button>
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Share App Modal */}
+        {modal === 'SHARE_APP' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{alignItems:'center'}}>
+               <h3 style={{marginBottom: 10, fontSize:22, fontWeight:900, color: 'var(--indigo-600)'}}>{['Chia sẻ Ứng dụng','Share App','アプリを共有','分享应用'][['vi','en','ja','zh'].indexOf(lang)||0]}</h3>
+               <p style={{color:'var(--slate-500)', fontSize: 13, textAlign:'center', marginBottom: 16}}>https://toanysd.github.io/beacon/</p>
+               <div style={{margin:'10px 0', padding: 24, background:'white', borderRadius: 24, border:'2px solid var(--indigo-100)', boxShadow:'0 10px 25px rgba(37,99,235,0.15)'}}>
+                  <canvas ref={c => { if(c) new QRious({element: c, value: 'https://toanysd.github.io/beacon/', size: 240}); }}></canvas>
+               </div>
+               
+               <button className="btn-full btn-primary" style={{marginTop: 30}} onClick={()=>{navigator.clipboard?.writeText('https://toanysd.github.io/beacon/'); alert('Đã chép Link!'); setModal(null);}}>🔗 {['Sao chép Link','Copy Link','リンクをコピー','复制链接'][['vi','en','ja','zh'].indexOf(lang)||0]}</button>
+            </div>
+          </div>
+        )}
+
+        {/* DIALER NUMPAD VIRTUAL (QUICK MODE) */}
+        {modal === 'QUICK' && (
+          <div className="modal-overlay" onClick={()=>setModal(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{padding: '30px 20px'}}>
+               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+                  <h3 style={{fontSize:22, fontWeight:900}}>Quay Số Điểm Hẹn</h3>
+                  <button onClick={()=>setModal(null)} style={{fontSize:24, fontWeight:800, color:'var(--slate-400)'}}>✕</button>
+               </div>
+
+               {/* History Chips */}
+               {historyList.length > 0 && (
+                   <div style={{marginBottom: 10}}>
+                       <div style={{fontSize:12, fontWeight:700, color:'var(--slate-400)'}}>{t.hist}</div>
+                       <div className="chips-row">
+                          {historyList.map(h => (
+                              <div className="chip" key={h} onClick={()=>setInputCode(h)}>
+                                 {fmt(h)} 
+                                 <span className="chip-del" onClick={(e)=>{e.stopPropagation(); saveHistory(''); setHistoryList(curr=>curr.filter(x=>x!==h));}}>✕</span>
+                              </div>
+                          ))}
+                       </div>
+                   </div>
+               )}
+
+               {/* Fake Input vs Native Input Toggle */}
+               <div style={{display:'flex', alignItems: 'stretch', gap: 10}}>
+                   {!useNativeKb ? (
+                       <div className={`input-field-fake ${inputCode.length === 0 ? 'empty' : ''}`} style={{flex: 1}}>
+                           {inputCode.length > 0 ? fmt(inputCode) : t.pin_hint}
+                       </div>
+                   ) : (
+                       <input className="input-field-native" type="number" pattern="[0-9]*" inputMode="numeric" placeholder={t.pin_hint} value={inputCode} 
+                              onChange={e => setInputCode(e.target.value.replace(/[^0-9]/g, '').slice(0,6))} autoFocus style={{flex: 1, minWidth: 0}} />
+                   )}
+                   <button onClick={()=>setInputCode('')} style={{padding: '0 20px', borderRadius: 'var(--radius-md)', background: 'var(--slate-100)', fontWeight: 800, fontSize: 13, color: 'var(--slate-600)', border: '2px solid var(--slate-200)'}}>{t.clear}</button>
+               </div>
+
+               {/* Custom Numpad Grid */}
+               {!useNativeKb ? (
+                   <div className="numpad">
+                       {[1,2,3,4,5,6,7,8,9].map(n => (
+                           <button className="num-btn" key={n} onClick={()=>setInputCode(p => (p+n).slice(0,6))}>{n}</button>
+                       ))}
+                       <button className="num-btn" style={{fontSize:16, background:'var(--slate-50)'}} onClick={()=>setUseNativeKb(true)}>⌨️</button>
+                       <button className="num-btn" onClick={()=>setInputCode(p => (p+'0').slice(0,6))}>0</button>
+                       <button className="num-btn" style={{fontSize:20, background:'var(--red-50)', color:'var(--red-600)'}} onClick={()=>setInputCode(p=>p.slice(0,-1))}>⌫</button>
+                   </div>
+               ) : (
+                   <div style={{marginTop: 20, textAlign: 'center'}}>
+                       <button onClick={()=>setUseNativeKb(false)} style={{padding: '12px 24px', borderRadius: '24px', border: '2px solid var(--slate-200)', background: 'var(--slate-50)', fontWeight: 800, color: 'var(--slate-800)', fontSize: 15}}>🔢 {t.switch_numpad}</button>
+                   </div>
+               )}
+
+               <div style={{display:'flex', gap:10, marginTop: 24}}>
+                   <button className="btn-full btn-primary" style={{padding:'20px', fontSize:18, boxShadow:'0 6px 15px rgba(37,99,235,0.4)', letterSpacing:1}} onClick={() => { if(inputCode.length===6) callPeer(inputCode, inputCode, 'SYNC'); else alert(t.error); }}>✨ BẮT ĐẦU CHỚP ĐÈN</button>
+               </div>
+            </div>
+          </div>
+        )}
+
+      </>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
